@@ -1,6 +1,6 @@
 {
   "name": "@codevachon/merge-branch",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "script to automate my git release process",
   "main": "index.js",
   "scripts": {

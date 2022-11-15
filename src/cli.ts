@@ -3,9 +3,14 @@ import figlet from "figlet";
 import inquirer from "inquirer";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
+import { askAQuestion } from "./askAQuestion";
 import { COLOR } from "./color";
 import { GitAPI } from "./GitApi";
 import { log } from "./log";
+import { readJSONFile, writeJSONFile } from "./packageJsonUtls";
+import { homedir } from "os";
+import { resolve as resolvePath } from "node:path";
+
 const yargsOptions: Record<string, yargs.Options> = {
     cwd: {
         type: "string",
@@ -24,6 +29,9 @@ const yargsOptions: Record<string, yargs.Options> = {
     }
 };
 
+const CleanExitErrorMessage = "User Canceled";
+const storedSettingsPath = resolvePath(homedir(), "./.merge-request.json");
+
 const preRun = (): Promise<Readonly<ISettings>> =>
     new Promise(async (resolve, reject) => {
         const args: ISettings = (await yargs(hideBin(process.argv)).options(yargsOptions)
@@ -40,6 +48,10 @@ const preRun = (): Promise<Readonly<ISettings>> =>
         );
         console.info();
 
+        const stored: Record<string, { source: string; target: string }> = JSON.parse(
+            readJSONFile(storedSettingsPath)
+        );
+
         const settings: ISettings = (await inquirer.prompt(
             [
                 {
@@ -55,6 +67,16 @@ const preRun = (): Promise<Readonly<ISettings>> =>
                     choices: async ({ cwd }: { cwd: string }) => {
                         const git = new GitAPI({ cwd });
                         const branches = await git.branchList();
+
+                        if (stored[cwd] && stored[cwd].source) {
+                            branches.sort((a) => {
+                                if (a === stored[cwd].source) {
+                                    return -1;
+                                } else {
+                                    return 0;
+                                }
+                            });
+                        }
 
                         return branches;
                     }
@@ -76,6 +98,16 @@ const preRun = (): Promise<Readonly<ISettings>> =>
                                 return 0;
                             }
                         });
+
+                        if (stored[cwd] && stored[cwd].target) {
+                            filterList.sort((a) => {
+                                if (a === stored[cwd].target) {
+                                    return -1;
+                                } else {
+                                    return 0;
+                                }
+                            });
+                        }
 
                         return filterList;
                     }
@@ -100,14 +132,38 @@ const preRun = (): Promise<Readonly<ISettings>> =>
                 )}`
             );
         });
+        console.info();
 
-        resolve(Object.freeze(settings));
+        const proceed: Boolean = await askAQuestion({
+            name: "proceed",
+            type: "confirm",
+            default: true,
+            message: `Are you sure you want to merge ${chalk.hex(COLOR.ORANGE)(
+                settings.source
+            )} into ${chalk.hex(COLOR.CYAN)(settings.target)}?`
+        });
+
+        if (proceed) {
+            writeJSONFile(
+                storedSettingsPath,
+                JSON.stringify({
+                    ...stored,
+                    [settings.cwd]: { source: settings.source, target: settings.target }
+                })
+            );
+
+            resolve(Object.freeze(settings));
+        } else {
+            reject(new Error(CleanExitErrorMessage));
+        }
     });
 
 const main = (settings: ISettings): Promise<string> =>
     new Promise(async (resolve, reject) => {
         const git = new GitAPI({ cwd: settings.cwd, verbose: true });
 
+        console.info();
+        log(`Check for Dirty State`);
         if (await git.isDirty()) {
             reject(new Error("Can not work on Dirty Repository"));
         }
@@ -138,7 +194,8 @@ const main = (settings: ISettings): Promise<string> =>
         if (targetBranch !== settings.target) {
             await git.checkout(settings.target);
         }
-        if (await git.branchHasRemote()) {
+        const targetHasRemote = await git.branchHasRemote();
+        if (targetHasRemote) {
             await git.pull();
         }
 
@@ -150,6 +207,19 @@ const main = (settings: ISettings): Promise<string> =>
             )}`
         );
         await git.merge(settings.source, settings.target);
+
+        if (targetHasRemote) {
+            console.info();
+            const proceed: Boolean = await askAQuestion({
+                name: "proceed",
+                type: "confirm",
+                default: true,
+                message: `Would you like to push ${chalk.hex(COLOR.CYAN)(settings.target)}?`
+            });
+            if (proceed) {
+                await git.push();
+            }
+        }
 
         resolve("Work Complete!");
     });
@@ -166,6 +236,13 @@ preRun()
         process.exit(0);
     })
     .catch((error) => {
-        console.error(error);
-        process.exit(1);
+        console.info();
+        if (error.message === CleanExitErrorMessage) {
+            console.info("User Canceled Request");
+            process.exit(0);
+        } else {
+            console.error(error);
+            console.info();
+            process.exit(1);
+        }
     });
