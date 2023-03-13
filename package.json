@@ -1,6 +1,6 @@
 {
   "name": "@codevachon/merge-branch",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "script to automate my git release process",
   "main": "index.js",
   "scripts": {
@@ -59,6 +59,7 @@
     "execa": "5",
     "figlet": "^1.5.2",
     "inquirer": "8",
+    "inquirer-search-list": "^1.2.6",
     "yargs": "^17.6.0"
   }
 }

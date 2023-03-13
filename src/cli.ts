@@ -11,6 +11,8 @@ import { readJSONFile, writeJSONFile } from "./packageJsonUtls";
 import { homedir } from "os";
 import { resolve as resolvePath } from "node:path";
 
+inquirer.registerPrompt("search-list", require("inquirer-search-list"));
+
 const yargsOptions: Record<string, yargs.Options> = {
     cwd: {
         type: "string",
@@ -26,6 +28,11 @@ const yargsOptions: Record<string, yargs.Options> = {
         type: "string",
         alias: "t",
         describe: "value to increment"
+    },
+    auto_push: {
+        type: "boolean",
+        alias: "p",
+        describe: "automatically push the branch to origin"
     }
 };
 
@@ -62,7 +69,7 @@ const preRun = (): Promise<Readonly<ISettings>> =>
                 },
                 {
                     name: "source",
-                    type: "list",
+                    type: "search-list",
                     message: "What is the Source Branch",
                     choices: async ({ cwd }: { cwd: string }) => {
                         const git = new GitAPI({ cwd });
@@ -83,7 +90,7 @@ const preRun = (): Promise<Readonly<ISettings>> =>
                 },
                 {
                     name: "target",
-                    type: "list",
+                    type: "search-list",
                     message: "What is the Target Branch",
                     choices: async ({ cwd, source }: { cwd: string; source: string }) => {
                         const git = new GitAPI({ cwd });
@@ -209,15 +216,20 @@ const main = (settings: ISettings): Promise<string> =>
         await git.merge(settings.source, settings.target);
 
         if (targetHasRemote) {
-            console.info();
-            const proceed: Boolean = await askAQuestion({
-                name: "proceed",
-                type: "confirm",
-                default: true,
-                message: `Would you like to push ${chalk.hex(COLOR.CYAN)(settings.target)}?`
-            });
-            if (proceed) {
+            if (settings.auto_push) {
+                log(`Auto push target to remote`);
                 await git.push();
+            } else {
+                console.info();
+                const proceed: Boolean = await askAQuestion({
+                    name: "proceed",
+                    type: "confirm",
+                    default: true,
+                    message: `Would you like to push ${chalk.hex(COLOR.CYAN)(settings.target)}?`
+                });
+                if (proceed) {
+                    await git.push();
+                }
             }
         }
 
