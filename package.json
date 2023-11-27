@@ -1,21 +1,21 @@
 {
   "name": "@codevachon/merge-branch",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "script to automate my git release process",
   "main": "index.js",
   "scripts": {
     "bootstrap": "./bootstrap.sh",
-    "dev": "yarn bootstrap && ts-node src/cli -c $(pwd)/test-repo ",
-    "start": "yarn build && node dist/cli.js",
+    "dev": "pnpm run bootstrap && ts-node src/cli -c $(pwd)/test-repo ",
+    "start": "pnpm run build && node dist/cli.js",
     "clean": "rm -fr dist pkg",
     "build": "tsc",
     "package": "pkg . ",
-    "full": "yarn clean && yarn build && yarn package",
+    "full": "pnpm run clean && pnpm run build && pnpm run package",
     "test": "jest",
     "test:coverage": "jest --coverage",
     "test:watch": "jest --watch -o ",
-    "docs": "yarn clean && typedoc src/index.ts",
-    "serve-docs": "yarn docs && http-server ./docs"
+    "docs": "pnpm run clean && typedoc src/index.ts",
+    "serve-docs": "pnpm run docs && http-server ./docs"
   },
   "repository": {
     "type": "git",
