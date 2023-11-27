@@ -135,4 +135,24 @@ export class GitAPI {
             return this.call(["push", "--no-verify"]);
         }
     }
+
+    public async getConflictedPaths() {
+        const conflictedPaths = new Set<string>();
+        const paths = await this.call(["ls-files", "--unmerged"]);
+
+        for (const unformattedPath of paths.split("\n")) {
+            const path = unformattedPath.split(new RegExp("\\s{1,}", "g"))[3];
+            conflictedPaths.add(path);
+        }
+
+        return Array.from(conflictedPaths);
+    }
+
+    public async gitAdd(path: string) {
+        return this.call(["add", path]);
+    }
+
+    public async commitMerge() {
+        return this.call(["commit", "--no-edit"]);
+    }
 }

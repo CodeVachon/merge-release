@@ -213,7 +213,57 @@ const main = (settings: ISettings): Promise<string> =>
                 settings.target
             )}`
         );
-        await git.merge(settings.source, settings.target);
+
+        try {
+            await git.merge(settings.source, settings.target);
+        } catch (error) {
+            const conflictedPaths = await git.getConflictedPaths();
+
+            const packageFiles = conflictedPaths.filter((path) => path.includes("package.json"));
+            let isStillConflicted = false;
+
+            if (packageFiles.length > 0) {
+                for (const path of packageFiles) {
+                    const fQPath = resolvePath(settings.cwd, path);
+
+                    log(`Attempt to Auto-Correct ${fQPath}`);
+
+                    const contents = await readJSONFile(fQPath);
+
+                    const newContents = contents.replace(
+                        new RegExp(
+                            `<{7}\\sHEAD\\n(\\s{1,}['"]version['"]:[^\\n]+)\\n={7}\\n([^\\n]+)\\n>{7}\\s[^\\n]+`,
+                            "gi"
+                        ),
+                        "$1"
+                    );
+
+                    await writeJSONFile(fQPath, newContents);
+
+                    if (newContents.includes("<<<<<<<")) {
+                        isStillConflicted = true;
+                    } else {
+                        await git.add(fQPath);
+                    }
+                }
+            } else {
+                isStillConflicted = true;
+            }
+
+            if (isStillConflicted) {
+                throw new Error(
+                    `An Error Has Occurred while Merging ${chalk.hex(COLOR.ORANGE)(
+                        settings.source
+                    )} into ${chalk.hex(COLOR.CYAN)(settings.target)}`
+                );
+            } else {
+                const status = await git.status();
+                if (status !== "") {
+                    reject(new Error("Merge Error"));
+                }
+                await git.commitMerge();
+            }
+        }
 
         if (targetHasRemote) {
             if (settings.auto_push) {
